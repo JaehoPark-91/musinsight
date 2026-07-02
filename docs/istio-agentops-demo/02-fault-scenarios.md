@@ -72,7 +72,6 @@ kubectl scale deploy details -n bookinfo --replicas=0
 | Kiali 그래프 | reviews→ratings 엣지 빨강 | productpage→details 엣지 빨강 |
 | Metric (Mimir) | response_code=500, response_flags=FI | response_code=503, response_flags=UH |
 | Log (Loki) | fault_filter_abort | no healthy upstream / connection refused |
-| Trace (Tempo) | ratings span error, http.status_code=500 | details hop이 응답 전 끊김(connection error) |
 | 구성 (kubectl) | ratings VS에 fault 블록 | details replicas=0 |
 
 response_flags로 계층을 구분한다. FI는 애플리케이션 계층(L7)에서 주입된 에러, UH/UF/UC는 연결 실패(L4)를 뜻한다.
