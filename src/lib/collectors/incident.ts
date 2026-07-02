@@ -47,6 +47,11 @@ interface PromAnomalyResult { label: string; rows: any[]; }
 
 async function collectPrometheusAnomalies(ds: any): Promise<PromAnomalyResult[]> {
   const queries: { label: string; promql: string }[] = [
+    // Istio/Envoy service mesh — 5xx by workload + response_flags.
+    // response_flags로 계층 구분: FI=앱 계층 fault(L7), UH/UF/UC=업스트림 연결 실패(L4).
+    { label: 'Istio Mesh 5xx / Failures by Service (response_flags)',
+      promql: 'topk(20, sum by (destination_service_name, source_workload, response_code, response_flags) (rate(istio_requests_total{response_code=~"5.."}[5m])))' },
+    // 일반 스택(비-메시)용 fallback — 위 istio 쿼리가 비면 아래가 채운다.
     { label: 'HTTP 5xx Error Rate by Service',
       promql: 'topk(20, sum by (namespace, service) (rate(http_requests_total{code=~"5.."}[5m])))' },
     { label: 'CPU Spikes by Pod',
@@ -78,8 +83,9 @@ async function collectPrometheusAnomalies(ds: any): Promise<PromAnomalyResult[]>
 // ============================================================================
 
 async function collectLokiErrors(ds: any): Promise<any[]> {
-  // Try structured level label first, then fallback to broader pattern
+  // Istio/Envoy mesh access logs first (5xx 응답 + L4 연결 실패), then generic fallbacks.
   const logQueries = [
+    '{namespace="bookinfo"} |~ `( 5[0-9][0-9] )|no healthy upstream|upstream connect error|connection refused`',
     '{level=~"error|fatal"}',
     '{job=~".+"} |= "error"',
   ];
