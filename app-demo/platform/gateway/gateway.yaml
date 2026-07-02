@@ -63,6 +63,16 @@ spec:
   parentRefs: [{ name: demo-gw, namespace: istio-system }]
   hostnames: ["mimir.kia-awsops.noticore.co.kr"]
   rules:
+    # 대시보드 데이터소스 연결 테스트는 prometheus 타입에 대해 /-/healthy 를 친다.
+    # Mimir는 /prometheus 프리픽스 아래에 /-/healthy 를 노출하지 않으므로(404),
+    # 이 경로만 Mimir 루트 /ready 로 리라이트해서 테스트가 통과하게 한다.
+    - matches:
+        - path: { type: Exact, value: /prometheus/-/healthy }
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path: { type: ReplaceFullPath, replaceFullPath: /ready }
+      backendRefs: [{ name: mimir, port: 8080 }]
     - backendRefs: [{ name: mimir, port: 8080 }]
 ---
 apiVersion: gateway.networking.k8s.io/v1
