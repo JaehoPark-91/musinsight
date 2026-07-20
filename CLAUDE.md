@@ -160,7 +160,6 @@ Step 6d: 06d-setup-agentcore-interpreter.sh  Code Interpreter
 Step 6e: 06e-setup-agentcore-config.sh   AgentCore 설정 적용 (ARN, Gateway URL)
 Step 6f: 06f-setup-agentcore-memory.sh   Memory Store (대화 이력, 365일 보관)
 Step 7:  07-setup-opencost.sh            Prometheus + OpenCost (EKS 비용 분석)
-Step 8:  (사용 안 함 — ALB Cognito 인증이 Step 5에서 처리됨)
 Step 9:  09-start-all.sh                 전체 서비스 시작
 Step 10: 10-stop-all.sh                  전체 서비스 중지
 Step 11: 11-verify.sh                    검증 (헬스체크)
@@ -353,7 +352,6 @@ Step 6d: 06d-setup-agentcore-interpreter.sh  Code Interpreter
 Step 6e: 06e-setup-agentcore-config.sh   AgentCore config apply (ARN, Gateway URL)
 Step 6f: 06f-setup-agentcore-memory.sh   Memory Store (conversation history, 365-day retention)
 Step 7:  07-setup-opencost.sh            Prometheus + OpenCost (EKS cost analysis)
-Step 8:  (unused — ALB Cognito auth is attached in Step 5)
 Step 9:  09-start-all.sh                 Start all services
 Step 10: 10-stop-all.sh                  Stop all services
 Step 11: 11-verify.sh                    Verification (health check)
