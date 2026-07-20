@@ -136,7 +136,7 @@ export default function Sidebar() {
   const features = getFeatures();
 
   useEffect(() => {
-    fetch('/awsops/api/steampipe?action=config')
+    fetch('/api/steampipe?action=config')
       .then(r => r.json())
       .then(d => {
         setCostEnabled(d.costEnabled !== false);
@@ -148,7 +148,7 @@ export default function Sidebar() {
   }, []);
 
   const isActive = (href: string) => {
-    const path = pathname.replace('/awsops', '') || '/';
+    const path = pathname || '/';
     if (href === '/') return path === '/';
     return path.startsWith(href);
   };
@@ -193,7 +193,7 @@ export default function Sidebar() {
           {expanded && (
             <div className="space-y-0.5">
               {item.subItems.map(sub => {
-                const path = pathname.replace('/awsops', '') || '/';
+                const path = pathname || '/';
                 const subActive = sub.href === item.href
                   ? path === sub.href   // exact match for parent-path sub-item
                   : isActive(sub.href);
@@ -251,7 +251,7 @@ export default function Sidebar() {
         <div className={`px-5 py-3 border-b border-navy-600 flex items-center justify-center ${customerLogoBg === 'light' ? 'bg-white/95' : ''}`}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/awsops/logos/${customerLogo}`}
+            src={`/logos/${customerLogo}`}
             alt={customerName || 'Customer'}
             className="object-contain max-h-[40px] max-w-[180px]"
           />
@@ -276,8 +276,8 @@ export default function Sidebar() {
           {/* Sign Out / 로그아웃 */}
           <button
             onClick={async () => {
-              await fetch('/awsops/api/auth', { method: 'POST' });
-              window.location.href = '/awsops';
+              await fetch('/api/auth', { method: 'POST' });
+              window.location.href = '/';
             }}
             className="p-2 rounded-lg text-gray-500 hover:text-accent-red hover:bg-navy-700 transition-colors"
             title={t('sidebar.signOut')}
@@ -324,7 +324,7 @@ export default function Sidebar() {
         <button
           onClick={() => {
             const next = !costEnabled;
-            fetch('/awsops/api/steampipe?action=config', {
+            fetch('/api/steampipe?action=config', {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ costEnabled: next }),

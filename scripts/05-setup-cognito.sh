@@ -54,7 +54,7 @@ if [ -z "$APP_DOMAIN" ]; then
     APP_DOMAIN=$(aws cloudformation describe-stacks \
         --stack-name AwsopsStack --region "$REGION" \
         --query "Stacks[0].Outputs[?OutputKey=='DashboardURL'].OutputValue | [0]" \
-        --output text 2>/dev/null | sed 's|https://||; s|/awsops$||' || echo "")
+        --output text 2>/dev/null | sed 's|https://||; s|/awsops$||; s|/$||' || echo "")
 fi
 if [ -z "$APP_DOMAIN" ] || [ "$APP_DOMAIN" = "None" ]; then
     echo -e "${RED}오류: 앱 도메인을 확인할 수 없습니다. / ERROR: Cannot determine app domain.${NC}"
@@ -139,7 +139,7 @@ CLIENT_OUTPUT=$(aws cognito-idp create-user-pool-client \
     --generate-secret \
     --supported-identity-providers COGNITO \
     --callback-urls "https://${APP_DOMAIN}/oauth2/idpresponse" \
-    --logout-urls "https://${APP_DOMAIN}/awsops" \
+    --logout-urls "https://${APP_DOMAIN}/" \
     --allowed-o-auth-flows code \
     --allowed-o-auth-scopes openid email profile \
     --allowed-o-auth-flows-user-pool-client \
@@ -230,7 +230,7 @@ echo "  User Pool ID:     $POOL_ID"
 echo "  Client ID:        $CLIENT_ID"
 echo "  Cognito Domain:   $COGNITO_DOMAIN"
 echo "  Admin Login:      $ADMIN_EMAIL / ********"
-echo "  Dashboard:        https://${APP_DOMAIN}/awsops"
+echo "  Dashboard:        https://${APP_DOMAIN}/"
 echo "  VSCode:           https://${APP_DOMAIN}/"
 echo ""
 echo "  NOTE: Step 8 (CloudFront + Lambda@Edge 연동)은 더 이상 필요 없습니다."

@@ -251,7 +251,7 @@ export default function DiagnosisPage() {
   useEffect(() => {
     const savedId = typeof window !== 'undefined' ? localStorage.getItem('awsops-diagnosis-reportId') : null;
     if (savedId && status === 'idle') {
-      fetch(`/awsops/api/report?action=status&id=${savedId}`)
+      fetch(`/api/report?action=status&id=${savedId}`)
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data) return;
@@ -277,7 +277,7 @@ export default function DiagnosisPage() {
 
   const fetchReportList = useCallback(async () => {
     try {
-      const res = await fetch('/awsops/api/report?action=list');
+      const res = await fetch('/api/report?action=list');
       if (!res.ok) return;
       const data = await res.json();
       setReports(data.reports || []);
@@ -319,7 +319,7 @@ export default function DiagnosisPage() {
     if (currentReportId && status === 'generating') {
       const poll = async () => {
         try {
-          const res = await fetch(`/awsops/api/report?action=status&id=${currentReportId}`);
+          const res = await fetch(`/api/report?action=status&id=${currentReportId}`);
           if (!res.ok) return;
           const data = await res.json();
 
@@ -366,7 +366,7 @@ export default function DiagnosisPage() {
     setProgress({ current: 0, total: 15, currentSection: '' });
 
     try {
-      const res = await fetch('/awsops/api/report', {
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -394,7 +394,7 @@ export default function DiagnosisPage() {
 
   const viewReport = useCallback(async (reportId: string) => {
     try {
-      const res = await fetch(`/awsops/api/report?action=status&id=${reportId}`);
+      const res = await fetch(`/api/report?action=status&id=${reportId}`);
       if (!res.ok) return;
       const data = await res.json();
 
@@ -441,7 +441,7 @@ export default function DiagnosisPage() {
 
   const fetchSchedule = useCallback(async () => {
     try {
-      const res = await fetch('/awsops/api/report?action=schedule');
+      const res = await fetch('/api/report?action=schedule');
       if (res.ok) {
         const data = await res.json();
         setSchedule(data.schedule);
@@ -454,7 +454,7 @@ export default function DiagnosisPage() {
   const saveSchedule = useCallback(async (updates: Partial<ReportSchedule>) => {
     setScheduleLoading(true);
     try {
-      const res = await fetch('/awsops/api/report', {
+      const res = await fetch('/api/report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'set-schedule', ...updates }),
@@ -470,7 +470,7 @@ export default function DiagnosisPage() {
   // --- Notification Settings ---
   const fetchNotification = useCallback(async () => {
     try {
-      const res = await fetch('/awsops/api/notification');
+      const res = await fetch('/api/notification');
       if (res.ok) {
         const data = await res.json();
         setNotifEnabled(data.enabled || false);
@@ -484,7 +484,7 @@ export default function DiagnosisPage() {
   const toggleNotification = useCallback(async (enabled: boolean) => {
     setNotifLoading(true);
     try {
-      await fetch('/awsops/api/notification', {
+      await fetch('/api/notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'toggle', enabled }),
@@ -498,7 +498,7 @@ export default function DiagnosisPage() {
     setNotifLoading(true);
     setNotifMessage(null);
     try {
-      const res = await fetch('/awsops/api/notification', {
+      const res = await fetch('/api/notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sync-emails', emails }),
@@ -518,7 +518,7 @@ export default function DiagnosisPage() {
   const sendTestNotification = useCallback(async () => {
     setNotifLoading(true);
     try {
-      const res = await fetch('/awsops/api/notification', {
+      const res = await fetch('/api/notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'test' }),
@@ -1043,7 +1043,7 @@ export default function DiagnosisPage() {
                 </button>
               )}
               <button
-                onClick={() => window.open(`/awsops/ai-diagnosis/report?id=${currentReportId}`, '_blank')}
+                onClick={() => window.open(`/ai-diagnosis/report?id=${currentReportId}`, '_blank')}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-purple/30 text-accent-purple hover:bg-accent-purple/10 text-xs font-medium transition-colors"
               >
                 <Printer size={14} /> PDF

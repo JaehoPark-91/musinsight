@@ -39,7 +39,7 @@ function PrintReportContent() {
 
   useEffect(() => {
     if (!reportId) { setError('No report ID'); setLoading(false); return; }
-    fetch(`/awsops/api/report?action=status&id=${reportId}`)
+    fetch(`/api/report?action=status&id=${reportId}`)
       .then(r => r.json())
       .then(data => {
         if (data.status === 'completed' && data.sections) {

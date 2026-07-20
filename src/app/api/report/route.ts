@@ -494,8 +494,8 @@ async function generateReportBackground(
 
   // Local download URLs as fallback (served via GET download-docx/download-md actions)
   // 로컬 다운로드 URL 폴백 (GET download-docx/download-md 액션으로 서빙)
-  if (!downloadUrlDocx) downloadUrlDocx = `/awsops/api/report?action=download-docx&id=${reportId}`;
-  if (!downloadUrlMd) downloadUrlMd = `/awsops/api/report?action=download-md&id=${reportId}`;
+  if (!downloadUrlDocx) downloadUrlDocx = `/api/report?action=download-docx&id=${reportId}`;
+  if (!downloadUrlMd) downloadUrlMd = `/api/report?action=download-md&id=${reportId}`;
 
   updateReportMeta(reportId, {
     status: 'completed',

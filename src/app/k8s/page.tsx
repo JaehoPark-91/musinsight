@@ -99,7 +99,7 @@ export default function K8sOverviewPage() {
     setRegisteringCluster(clusterName);
     setRegisterResult(null);
     try {
-      const res = await fetch('/awsops/api/k8s', {
+      const res = await fetch('/api/k8s', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clusterName, region }),
@@ -112,7 +112,7 @@ export default function K8sOverviewPage() {
         for (let i = 0; i < 5; i++) {
           await new Promise(r => setTimeout(r, 3000));
           try {
-            const probe = await fetch('/awsops/api/steampipe?bustCache=true', {
+            const probe = await fetch('/api/steampipe?bustCache=true', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ accountId: currentAccountId, queries: { probe: k8sQ.nodeList } }),
@@ -147,7 +147,7 @@ export default function K8sOverviewPage() {
     try {
       const ipPrefix = nodeName.split('.')[0];
       const eniSql = `SELECT network_interface_id, status, interface_type, private_ip_address::text AS primary_ip, attachment_status, private_ip_addresses::text AS all_ips FROM aws_ec2_network_interface WHERE attached_instance_id IN (SELECT instance_id FROM aws_ec2_instance WHERE private_dns_name LIKE '${ipPrefix}%')`;
-      const res = await fetch('/awsops/api/steampipe', {
+      const res = await fetch('/api/steampipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accountId: currentAccountId, queries: { enis: eniSql } }),
@@ -161,7 +161,7 @@ export default function K8sOverviewPage() {
         const eniIds = eniRows.map((e: any) => `'${e.network_interface_id}'`).join(',');
         const trafficSql = `SELECT dimension_value AS eni_id, metric_name, average, timestamp FROM aws_cloudwatch_metric_statistic_data_point WHERE namespace = 'AWS/EC2' AND metric_name IN ('NetworkIn', 'NetworkOut', 'NetworkPacketsIn', 'NetworkPacketsOut') AND dimension_name = 'NetworkInterfaceId' AND dimension_value IN (${eniIds}) AND period = 300 AND timestamp >= NOW() - INTERVAL '1 hour' ORDER BY dimension_value, metric_name, timestamp DESC`;
         try {
-          const tRes = await fetch('/awsops/api/steampipe', {
+          const tRes = await fetch('/api/steampipe', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ accountId: currentAccountId, queries: { traffic: trafficSql } }),
@@ -209,7 +209,7 @@ export default function K8sOverviewPage() {
   const fetchData = useCallback(async (bustCache = false) => {
     setLoading(true);
     try {
-      const res = await fetch(bustCache ? '/awsops/api/steampipe?bustCache=true' : '/awsops/api/steampipe', {
+      const res = await fetch(bustCache ? '/api/steampipe?bustCache=true' : '/api/steampipe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

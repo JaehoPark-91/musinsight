@@ -61,7 +61,7 @@ export default function BedrockPage() {
     setLoading(true);
     try {
       const acctParam = currentAccountId && currentAccountId !== '__all__' ? `&accountId=${currentAccountId}` : '';
-      const res = await fetch(`/awsops/api/bedrock-metrics?action=summary&range=${r || range}${acctParam}`);
+      const res = await fetch(`/api/bedrock-metrics?action=summary&range=${r || range}${acctParam}`);
       const data = await res.json();
       setMetrics(data.metrics || []);
       setTotalCost(data.totalCost || 0);

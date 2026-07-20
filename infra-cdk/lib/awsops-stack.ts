@@ -139,7 +139,8 @@ export class AwsopsStack extends cdk.Stack {
       description: 'AWSops EC2 SG - ALB traffic only',
       allowAllOutbound: true,
     });
-    ec2Sg.addIngressRule(albSg, ec2.Port.tcp(8888), 'VSCode from ALB');
+    // 8889 = nginx (/vscode 접두사 제거 후 code-server 8888로 중계)
+    ec2Sg.addIngressRule(albSg, ec2.Port.tcp(8889), 'VSCode via nginx from ALB');
     ec2Sg.addIngressRule(albSg, ec2.Port.tcp(3000), 'Dashboard from ALB');
 
     // -------------------------------------------------------
@@ -421,15 +422,16 @@ export class AwsopsStack extends cdk.Stack {
       validation: acm.CertificateValidation.fromDns(hostedZone),
     });
 
-    const vscodeTg = new elbv2.ApplicationTargetGroup(this, 'VSCodeTargetGroup', {
+    // nginx(8889)가 /vscode 접두사를 벗겨 code-server(8888)로 중계
+    const vscodeTg = new elbv2.ApplicationTargetGroup(this, 'VSCodeProxyTargetGroup', {
       vpc: this.vpc,
-      port: 8888,
+      port: 8889,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.INSTANCE,
       healthCheck: {
-        path: '/',
-        port: '8888',
-        healthyHttpCodes: '200,302',
+        path: '/vscode/',
+        port: '8889',
+        healthyHttpCodes: '200,301,302',
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         healthyThresholdCount: 2,
@@ -437,7 +439,7 @@ export class AwsopsStack extends cdk.Stack {
       },
       stickinessCookieDuration: cdk.Duration.days(1),
     });
-    vscodeTg.addTarget(new elbv2_targets.InstanceTarget(this.instance, 8888));
+    vscodeTg.addTarget(new elbv2_targets.InstanceTarget(this.instance, 8889));
 
     const dashboardTg = new elbv2.ApplicationTargetGroup(this, 'DashboardTargetGroup', {
       vpc: this.vpc,
@@ -445,7 +447,7 @@ export class AwsopsStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.INSTANCE,
       healthCheck: {
-        path: '/awsops',
+        path: '/',
         port: '3000',
         healthyHttpCodes: '200,302',
         interval: cdk.Duration.seconds(30),
@@ -458,7 +460,8 @@ export class AwsopsStack extends cdk.Stack {
     dashboardTg.addTarget(new elbv2_targets.InstanceTarget(this.instance, 3000));
 
     // -------------------------------------------------------
-    // Listeners: 443 (HTTPS) — default: VSCode(8888), /awsops*: Dashboard(3000)
+    // Listeners: 443 (HTTPS) — default: Dashboard(3000), /vscode*: nginx(8889)
+    // 구 /awsops* 경로는 루트로 리다이렉트 (하위 호환)
     // Cognito authenticate 액션은 배포 후 05-setup-cognito.sh가 부착
     // -------------------------------------------------------
     const listener443 = this.alb.addListener('Listener443', {
@@ -466,15 +469,26 @@ export class AwsopsStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTPS,
       certificates: [certificate],
       open: false,
-      defaultAction: elbv2.ListenerAction.forward([vscodeTg]),
+      defaultAction: elbv2.ListenerAction.forward([dashboardTg]),
     });
 
-    listener443.addAction('DashboardRule', {
+    listener443.addAction('VSCodeRule', {
       priority: 1,
+      conditions: [
+        elbv2.ListenerCondition.pathPatterns(['/vscode', '/vscode/*']),
+      ],
+      action: elbv2.ListenerAction.forward([vscodeTg]),
+    });
+
+    listener443.addAction('LegacyAwsopsRedirect', {
+      priority: 2,
       conditions: [
         elbv2.ListenerCondition.pathPatterns(['/awsops', '/awsops/*']),
       ],
-      action: elbv2.ListenerAction.forward([dashboardTg]),
+      action: elbv2.ListenerAction.redirect({
+        path: '/',
+        permanent: false,
+      }),
     });
 
     // Port 80: HTTPS 리다이렉트
@@ -510,13 +524,13 @@ export class AwsopsStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'DashboardURL', {
-      value: `https://${customDomain}/awsops`,
-      description: 'AWSops Dashboard URL',
+      value: `https://${customDomain}/`,
+      description: 'MusinSight Dashboard URL',
       exportName: `${this.stackName}-Dashboard-URL`,
     });
 
     new cdk.CfnOutput(this, 'VSCodeURL', {
-      value: `https://${customDomain}/`,
+      value: `https://${customDomain}/vscode/`,
       description: 'VSCode (code-server) URL',
       exportName: `${this.stackName}-VSCode-URL`,
     });
