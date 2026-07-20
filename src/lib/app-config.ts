@@ -24,7 +24,7 @@ export interface AccountConfig {
   alias: string;           // Human-readable name ("Production", "Staging")
   connectionName: string;  // Steampipe connection name ("aws_123456789012")
   region: string;          // Primary region
-  isHost: boolean;         // Is this the host account (where AWSops runs)
+  isHost: boolean;         // Is this the host account (where MusinSight runs)
   features: AccountFeatures;
   profile?: string;        // AWS CLI profile for cross-account access
 }

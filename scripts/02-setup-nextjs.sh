@@ -169,7 +169,13 @@ AGGR
     sleep 2
 fi
 
-export CONFIG_FILE ACCOUNT_ID REGION COST_ENABLED EKS_ENABLED
+# 계정 표시명: IAM 계정 별칭 → 없으면 계정 ID / Display name: IAM account alias, fallback to account ID
+ACCOUNT_ALIAS=$(aws iam list-account-aliases --query "AccountAliases[0]" --output text 2>/dev/null || echo "")
+if [ -z "$ACCOUNT_ALIAS" ] || [ "$ACCOUNT_ALIAS" = "None" ]; then
+    ACCOUNT_ALIAS="$ACCOUNT_ID"
+fi
+
+export CONFIG_FILE ACCOUNT_ID ACCOUNT_ALIAS REGION COST_ENABLED EKS_ENABLED
 python3 << 'PYEOF'
 import json, os
 cfg_path = os.environ.get('CONFIG_FILE', 'data/config.json')
@@ -183,7 +189,7 @@ accounts = cfg.get('accounts', [])
 if not any(a.get('isHost') for a in accounts):
     host = {
         'accountId': account_id,
-        'alias': 'Host',
+        'alias': os.environ.get('ACCOUNT_ALIAS') or account_id,
         'connectionName': f'aws_{account_id}',
         'region': region,
         'isHost': True,

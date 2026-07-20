@@ -380,7 +380,7 @@ Respond with ONLY a JSON object: {"routes": ["<route>"]} or {"routes": ["<route1
 
 const CLASSIFICATION_PROMPT = buildClassificationPrompt();
 
-const BASE_SYSTEM_PROMPT = `You are AWSops AI Assistant, an expert in AWS cloud operations.
+const BASE_SYSTEM_PROMPT = `You are MusinSight AI Assistant, an expert in AWS cloud operations.
 You help users understand and manage their AWS infrastructure.
 You have access to real-time AWS resource data via Steampipe queries.
 When users ask about their resources, analyze the data provided.
