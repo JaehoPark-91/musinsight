@@ -429,6 +429,8 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for details.
 - [ARCHITECTURE.md](scripts/ARCHITECTURE.md) — 전체 아키텍처 상세
 - [INSTALL_GUIDE.md](docs/INSTALL_GUIDE.md) — 설치 가이드
 - [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) — 알려진 이슈 + 해결법
+- [runbooks/musinsa-deployment.md](docs/runbooks/musinsa-deployment.md) — musinsa dev1 배포 주의사항 (재배포 시 필독)
+- [ADR-009](docs/decisions/009-alb-cognito-auth.md) — CloudFront 대신 ALB Cognito 인증을 쓰는 이유
 - [CHANGELOG.md](CHANGELOG.md) — 변경 이력
 
 ---
