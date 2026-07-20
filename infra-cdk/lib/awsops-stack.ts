@@ -473,7 +473,7 @@ export class AwsopsStack extends cdk.Stack {
     });
 
     listener443.addAction('VSCodeRule', {
-      priority: 1,
+      priority: 10,
       conditions: [
         elbv2.ListenerCondition.pathPatterns(['/vscode', '/vscode/*']),
       ],
@@ -481,7 +481,7 @@ export class AwsopsStack extends cdk.Stack {
     });
 
     listener443.addAction('LegacyAwsopsRedirect', {
-      priority: 2,
+      priority: 20,
       conditions: [
         elbv2.ListenerCondition.pathPatterns(['/awsops', '/awsops/*']),
       ],
