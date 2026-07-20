@@ -38,6 +38,14 @@ export class AwsopsStack extends cdk.Stack {
       description: 'Password for VSCode Server (minimum 8 characters)',
     });
 
+    // 멀티 어카운트에서 대상 계정에 배포하는 읽기 전용 역할 이름
+    // Name of the read-only role deployed in each target account (multi-account)
+    const crossAccountRoleName = new cdk.CfnParameter(this, 'CrossAccountRoleName', {
+      type: 'String',
+      default: 'AWSopsReadOnlyRole',
+      description: 'IAM role name deployed in target accounts for cross-account monitoring',
+    });
+
     // 기존 VPC ID (빈 값이면 새 VPC 생성) / Existing VPC ID (empty = create new VPC)
     const existingVpcId = new cdk.CfnParameter(this, 'ExistingVpcId', {
       type: 'String',
@@ -225,6 +233,14 @@ export class AwsopsStack extends cdk.Stack {
     ec2Role.addToPolicy(new iam.PolicyStatement({
       actions: ['eks:CreateAccessEntry', 'eks:AssociateAccessPolicy'],
       resources: ['*'],
+    }));
+
+    // 멀티 어카운트: 대상 계정의 읽기 전용 역할을 AssumeRole
+    // Multi-account: assume the read-only role deployed in each target account
+    // (infra-cdk/cfn-target-account-role.yaml — 역할 이름으로만 범위 제한)
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      actions: ['sts:AssumeRole'],
+      resources: [`arn:aws:iam::*:role/${crossAccountRoleName.valueAsString}`],
     }));
 
     // Cognito 설정 + ALB 리스너에 인증 액션 부착 (05-setup-cognito.sh가 EC2에서 실행)
