@@ -440,8 +440,8 @@ for acc in accounts:
         content = f'''connection \"{conn_name}\" {{
   plugin = \"aws\"
   regions = [\"{region}\"]
-  assume_role_arn  = \"{role_arn}\"
-  assume_role_external_id = \"{external_id}\"
+  role_arn = \"{role_arn}\"
+  external_id = \"{external_id}\"
 {ignore_codes}
 }}
 '''
