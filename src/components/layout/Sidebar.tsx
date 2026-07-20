@@ -276,8 +276,17 @@ export default function Sidebar() {
           {/* Sign Out / 로그아웃 */}
           <button
             onClick={async () => {
-              await fetch('/api/auth', { method: 'POST' });
-              window.location.href = '/';
+              // ALB 세션 쿠키 만료 후 Cognito 로그아웃으로 이동 (앱 쿠키만 지우면 ALB가 통과시킴)
+              // Expire ALB session cookies, then hand off to Cognito logout
+              let target = '/';
+              try {
+                const res = await fetch('/api/auth', { method: 'POST' });
+                const data = await res.json();
+                if (data?.logoutUrl) target = data.logoutUrl;
+              } catch {
+                // 네트워크 실패 시에도 최소한 루트로 이동 / fall back to root
+              }
+              window.location.href = target;
             }}
             className="p-2 rounded-lg text-gray-500 hover:text-accent-red hover:bg-navy-700 transition-colors"
             title={t('sidebar.signOut')}
