@@ -2,8 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as elbv2_targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53targets from 'aws-cdk-lib/aws-route53-targets';
@@ -13,7 +11,6 @@ import { Construct } from 'constructs';
 export class AwsopsStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly alb: elbv2.ApplicationLoadBalancer;
-  public readonly distribution: cloudfront.Distribution;
   public readonly instance: ec2.Instance;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -39,11 +36,6 @@ export class AwsopsStack extends cdk.Stack {
       noEcho: true,
       minLength: 8,
       description: 'Password for VSCode Server (minimum 8 characters)',
-    });
-
-    const cloudFrontPrefixListId = new cdk.CfnParameter(this, 'CloudFrontPrefixListId', {
-      type: 'String',
-      description: 'CloudFront origin-facing managed prefix list ID (pl-22a6434b for ap-northeast-2)',
     });
 
     // 기존 VPC ID (빈 값이면 새 VPC 생성) / Existing VPC ID (empty = create new VPC)
@@ -83,7 +75,7 @@ export class AwsopsStack extends cdk.Stack {
         ],
       });
       // 새 VPC에 이름 태그 / Tag new VPC with name
-      cdk.Tags.of(this.vpc).add('Name', `${this.stackName}-VPC`);
+      cdk.Tags.of(this.vpc).add('Name', 'jaeho.p-vpc');
     }
 
     // -------------------------------------------------------
@@ -129,23 +121,16 @@ export class AwsopsStack extends cdk.Stack {
     // Security Groups
     // -------------------------------------------------------
 
-    // ALB SG: CloudFront에서만 접근 허용 / Allow from CloudFront only
+    // ALB SG: HTTPS(443) + HTTP(80, 443 리다이렉트용) 인터넷 허용
+    // 인증은 ALB의 Cognito authenticate 액션이 담당 (SCP로 CloudFront 사용 불가)
     const albSg = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc: this.vpc,
       securityGroupName: 'awsops-alb-sg',
-      description: 'AWSops ALB SG - CloudFront origin-facing only',
+      description: 'AWSops ALB SG - HTTPS with Cognito auth',
       allowAllOutbound: true,
     });
-    // Use single port range (80-3000) to stay within SG rules limit
-    // CloudFront prefix list has 120+ entries; each entry counts as 1 rule
-    new ec2.CfnSecurityGroupIngress(this, 'ALBIngressFromCloudFront', {
-      groupId: albSg.securityGroupId,
-      ipProtocol: 'tcp',
-      fromPort: 80,
-      toPort: 3000,
-      sourcePrefixListId: cloudFrontPrefixListId.valueAsString,
-      description: 'HTTP/Dashboard ports from CloudFront origin-facing',
-    });
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS');
+    albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP redirect to HTTPS');
 
     // EC2 SG: ALB에서만 접근 허용 / Allow from ALB only
     const ec2Sg = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
@@ -241,14 +226,18 @@ export class AwsopsStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // CloudFront + Lambda@Edge management (08-setup-cloudfront-auth.sh)
+    // Cognito 설정 + ALB 리스너에 인증 액션 부착 (05-setup-cognito.sh가 EC2에서 실행)
+    // Cognito setup + attaching auth action to ALB listener (05-setup-cognito.sh runs on EC2)
+    ec2Role.addToPolicy(new iam.PolicyStatement({
+      actions: ['cognito-idp:*'],
+      resources: ['*'],
+    }));
     ec2Role.addToPolicy(new iam.PolicyStatement({
       actions: [
-        'cloudfront:GetDistribution',
-        'cloudfront:GetDistributionConfig',
-        'cloudfront:UpdateDistribution',
+        'elasticloadbalancing:ModifyListener',
+        'elasticloadbalancing:ModifyRule',
       ],
-      resources: [`arn:aws:cloudfront::${this.account}:distribution/*`],
+      resources: ['*'],
     }));
 
     // -------------------------------------------------------
@@ -411,18 +400,25 @@ export class AwsopsStack extends cdk.Stack {
     });
     cdk.Tags.of(this.alb).add('Name', 'awsops-alb');
 
-    // Custom header secret for CloudFront -> ALB validation
-    const customSecret = `${this.stackName}-secret-${this.account}`;
+    // -------------------------------------------------------
+    // Custom Domain + ACM Certificate (HTTPS 필수 — ALB Cognito 인증 전제조건)
+    // Usage: cdk deploy -c customDomain=awsops.dev1.musinsa.io
+    // -------------------------------------------------------
+    const customDomain = this.node.tryGetContext('customDomain') as string | undefined;
+    if (!customDomain) {
+      throw new Error('customDomain context is required (e.g. -c customDomain=awsops.dev1.musinsa.io) — ALB Cognito auth needs an HTTPS listener');
+    }
+    const hostedZoneNameCtx = this.node.tryGetContext('hostedZoneName') as string | undefined;
+    // 'awsops.dev1.musinsa.io' → 'dev1.musinsa.io'
+    const zoneName = hostedZoneNameCtx || customDomain.split('.').slice(1).join('.');
+    const hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+      domainName: zoneName,
+    });
 
-    // Port 80 Listener (VSCode: 8888) with custom header validation
-    const listener80 = this.alb.addListener('Listener80', {
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      open: false,
-      defaultAction: elbv2.ListenerAction.fixedResponse(403, {
-        contentType: 'text/plain',
-        messageBody: 'Access Denied',
-      }),
+    // ALB용 리전 인증서 (CloudFront 미사용 → us-east-1 불필요)
+    const certificate = new acm.Certificate(this, 'Certificate', {
+      domainName: customDomain,
+      validation: acm.CertificateValidation.fromDns(hostedZone),
     });
 
     const vscodeTg = new elbv2.ApplicationTargetGroup(this, 'VSCodeTargetGroup', {
@@ -443,25 +439,6 @@ export class AwsopsStack extends cdk.Stack {
     });
     vscodeTg.addTarget(new elbv2_targets.InstanceTarget(this.instance, 8888));
 
-    listener80.addAction('VSCodeRule', {
-      priority: 1,
-      conditions: [
-        elbv2.ListenerCondition.httpHeader('X-Custom-Secret', [customSecret]),
-      ],
-      action: elbv2.ListenerAction.forward([vscodeTg]),
-    });
-
-    // Port 3000 Listener (Dashboard) with custom header validation
-    const listener3000 = this.alb.addListener('Listener3000', {
-      port: 3000,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      open: false,
-      defaultAction: elbv2.ListenerAction.fixedResponse(403, {
-        contentType: 'text/plain',
-        messageBody: 'Access Denied',
-      }),
-    });
-
     const dashboardTg = new elbv2.ApplicationTargetGroup(this, 'DashboardTargetGroup', {
       vpc: this.vpc,
       port: 3000,
@@ -480,113 +457,48 @@ export class AwsopsStack extends cdk.Stack {
     });
     dashboardTg.addTarget(new elbv2_targets.InstanceTarget(this.instance, 3000));
 
-    listener3000.addAction('DashboardRule', {
+    // -------------------------------------------------------
+    // Listeners: 443 (HTTPS) — default: VSCode(8888), /awsops*: Dashboard(3000)
+    // Cognito authenticate 액션은 배포 후 05-setup-cognito.sh가 부착
+    // -------------------------------------------------------
+    const listener443 = this.alb.addListener('Listener443', {
+      port: 443,
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      certificates: [certificate],
+      open: false,
+      defaultAction: elbv2.ListenerAction.forward([vscodeTg]),
+    });
+
+    listener443.addAction('DashboardRule', {
       priority: 1,
       conditions: [
-        elbv2.ListenerCondition.httpHeader('X-Custom-Secret', [customSecret]),
+        elbv2.ListenerCondition.pathPatterns(['/awsops', '/awsops/*']),
       ],
       action: elbv2.ListenerAction.forward([dashboardTg]),
     });
 
-    // Allow ALB SG ingress on port 3000 (already added via CfnSecurityGroupIngress above)
-
-    // -------------------------------------------------------
-    // CloudFront Distribution
-    // -------------------------------------------------------
-    const albOriginVSCode = new origins.HttpOrigin(this.alb.loadBalancerDnsName, {
-      httpPort: 80,
-      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-      readTimeout: cdk.Duration.seconds(60),
-      customHeaders: {
-        'X-Custom-Secret': customSecret,
-      },
+    // Port 80: HTTPS 리다이렉트
+    this.alb.addListener('Listener80', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      open: false,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+        permanent: true,
+      }),
     });
 
-    const albOriginDashboard = new origins.HttpOrigin(this.alb.loadBalancerDnsName, {
-      httpPort: 3000,
-      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-      readTimeout: cdk.Duration.seconds(60),
-      customHeaders: {
-        'X-Custom-Secret': customSecret,
-      },
-    });
-
-    // Cache policy: no caching (use managed CachingDisabled policy)
-    const noCachePolicy = cloudfront.CachePolicy.CACHING_DISABLED;
-
-    // Origin request policy: forward all viewer headers, cookies, query strings
-    const allViewerOriginPolicy = cloudfront.OriginRequestPolicy.ALL_VIEWER;
-
     // -------------------------------------------------------
-    // Custom Domain (optional, via CDK context)
-    // Usage: cdk deploy -c customDomain=awsops.example.com
-    // Optionally: -c hostedZoneName=example.com
+    // Route 53 A record (alias) — 커스텀 도메인 → ALB
     // -------------------------------------------------------
-    const customDomain = this.node.tryGetContext('customDomain') as string | undefined;
-    const hostedZoneNameCtx = this.node.tryGetContext('hostedZoneName') as string | undefined;
-
-    let domainProps: { domainNames?: string[]; certificate?: acm.ICertificate } = {};
-    let hostedZone: route53.IHostedZone | undefined;
-
-    if (customDomain) {
-      // Derive hosted zone name from domain (e.g., 'awsops.atomai.click' → 'atomai.click')
-      const zoneName = hostedZoneNameCtx || customDomain.split('.').slice(-2).join('.');
-      hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
-        domainName: zoneName,
-      });
-
-      // ACM certificate in us-east-1 (required for CloudFront)
-      const certificate = new acm.DnsValidatedCertificate(this, 'Certificate', {
-        domainName: customDomain,
-        hostedZone,
-        region: 'us-east-1',
-      });
-
-      domainProps = {
-        domainNames: [customDomain],
-        certificate,
-      };
-    }
-
-    this.distribution = new cloudfront.Distribution(this, 'CloudFrontDistribution', {
-      ...domainProps,
-      comment: `AWSops Dashboard distribution for ${this.stackName}`,
-      defaultBehavior: {
-        origin: albOriginVSCode,
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        cachePolicy: noCachePolicy,
-        originRequestPolicy: allViewerOriginPolicy,
-      },
-      additionalBehaviors: {
-        '/awsops*': {
-          origin: albOriginDashboard,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: noCachePolicy,
-          originRequestPolicy: allViewerOriginPolicy,
-        },
-        '/awsops/_next/*': {
-          origin: albOriginDashboard,
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
-          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-        },
-      },
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_ALL,
+    new route53.ARecord(this, 'DomainARecord', {
+      zone: hostedZone,
+      recordName: customDomain,
+      target: route53.RecordTarget.fromAlias(
+        new route53targets.LoadBalancerTarget(this.alb),
+      ),
     });
-    cdk.Tags.of(this.distribution).add('Name', `${this.stackName}-CloudFront`);
-
-    // Route 53 A record (alias) pointing custom domain to CloudFront
-    if (customDomain && hostedZone) {
-      new route53.ARecord(this, 'DomainARecord', {
-        zone: hostedZone,
-        recordName: customDomain,
-        target: route53.RecordTarget.fromAlias(
-          new route53targets.CloudFrontTarget(this.distribution),
-        ),
-      });
-    }
 
     // -------------------------------------------------------
     // Outputs
@@ -597,17 +509,27 @@ export class AwsopsStack extends cdk.Stack {
       exportName: `${this.stackName}-VPC-ID`,
     });
 
-    new cdk.CfnOutput(this, 'CloudFrontURL', {
-      value: customDomain
-        ? `https://${customDomain}`
-        : `https://${this.distribution.distributionDomainName}`,
-      description: 'CloudFront Distribution URL',
-      exportName: `${this.stackName}-CloudFront-URL`,
+    new cdk.CfnOutput(this, 'DashboardURL', {
+      value: `https://${customDomain}/awsops`,
+      description: 'AWSops Dashboard URL',
+      exportName: `${this.stackName}-Dashboard-URL`,
+    });
+
+    new cdk.CfnOutput(this, 'VSCodeURL', {
+      value: `https://${customDomain}/`,
+      description: 'VSCode (code-server) URL',
+      exportName: `${this.stackName}-VSCode-URL`,
+    });
+
+    new cdk.CfnOutput(this, 'HttpsListenerArn', {
+      value: listener443.listenerArn,
+      description: 'ALB HTTPS listener ARN (Cognito auth attached by 05-setup-cognito.sh)',
+      exportName: `${this.stackName}-Https-Listener-ARN`,
     });
 
     new cdk.CfnOutput(this, 'PublicALBEndpoint', {
-      value: `http://${this.alb.loadBalancerDnsName}`,
-      description: 'Public ALB DNS Name (direct access denied - use CloudFront)',
+      value: this.alb.loadBalancerDnsName,
+      description: 'Public ALB DNS Name',
       exportName: `${this.stackName}-Public-ALB-DNS`,
     });
 
