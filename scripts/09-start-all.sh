@@ -117,21 +117,16 @@ echo -e "${CYAN}   Access URLs${NC}"
 echo -e "${CYAN}=================================================================${NC}"
 echo "  Local:       http://localhost:3000/awsops"
 
-# Auto-detect CloudFront URL
-CF_DOMAIN=$(aws cloudfront list-distributions \
-    --query "DistributionList.Items[?contains(Origins.Items[].CustomOriginConfig.HTTPPort, \`3000\`)].DomainName | [0]" \
-    --output text --region us-east-1 2>/dev/null || echo "")
+# Auto-detect Dashboard URL from CDK stack output (ALB + custom domain)
+DASHBOARD_URL=$(aws cloudformation describe-stacks \
+    --stack-name AwsopsStack --region "$REGION" \
+    --query "Stacks[0].Outputs[?OutputKey=='DashboardURL'].OutputValue | [0]" \
+    --output text 2>/dev/null || echo "")
 
-if [ -z "$CF_DOMAIN" ] || [ "$CF_DOMAIN" = "None" ]; then
-    CF_DOMAIN=$(aws cloudfront list-distributions \
-        --query "DistributionList.Items[?contains(Origins.Items[].DomainName, 'elb.amazonaws.com')].DomainName | [0]" \
-        --output text --region us-east-1 2>/dev/null || echo "")
-fi
-
-if [ -n "$CF_DOMAIN" ] && [ "$CF_DOMAIN" != "None" ]; then
-    echo -e "  CloudFront:  ${GREEN}https://${CF_DOMAIN}/awsops${NC}"
+if [ -n "$DASHBOARD_URL" ] && [ "$DASHBOARD_URL" != "None" ]; then
+    echo -e "  Dashboard:   ${GREEN}${DASHBOARD_URL}${NC}"
 else
-    echo -e "  CloudFront:  ${YELLOW}(not configured)${NC}"
+    echo -e "  Dashboard:   ${YELLOW}(not configured)${NC}"
 fi
 
 # -- Cognito login info --------------------------------------------------------
