@@ -1,5 +1,5 @@
-// AWSops AI Diagnosis Report API — Async background generation + S3 storage + Scheduling
-// AWSops AI 종합진단 리포트 API — 비동기 백그라운드 생성 + S3 저장 + 스케줄링
+// MusinSight AI Diagnosis Report API — Async background generation + S3 storage + Scheduling
+// MusinSight AI 종합진단 리포트 API — 비동기 백그라운드 생성 + S3 저장 + 스케줄링
 import { NextRequest, NextResponse } from 'next/server';
 import { BedrockRuntimeClient, InvokeModelWithResponseStreamCommand } from '@aws-sdk/client-bedrock-runtime';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -424,7 +424,7 @@ async function generateReportBackground(
   });
 
   const reportInput = {
-    title: isEn ? 'AWSops AI Diagnosis Report' : 'AWSops AI 종합진단 리포트',
+    title: isEn ? 'MusinSight AI Diagnosis Report' : 'MusinSight AI 종합진단 리포트',
     subtitle: new Date().toLocaleDateString(isEn ? 'en-US' : 'ko-KR', {
       year: 'numeric',
       month: 'long',
@@ -737,7 +737,7 @@ export async function GET(request: NextRequest) {
         return new NextResponse(buffer, {
           headers: {
             'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'Content-Disposition': `attachment; filename="AWSops_Report_${date}.docx"`,
+            'Content-Disposition': `attachment; filename="MusinSight_Report_${date}.docx"`,
             'Content-Length': String(buffer.length),
           },
         });
@@ -777,7 +777,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(buffer, {
         headers: {
           'Content-Type': 'text/markdown; charset=utf-8',
-          'Content-Disposition': `attachment; filename="AWSops_Report_${date}.md"`,
+          'Content-Disposition': `attachment; filename="MusinSight_Report_${date}.md"`,
           'Content-Length': String(buffer.length),
         },
       });
@@ -785,7 +785,7 @@ export async function GET(request: NextRequest) {
 
     // Last resort: generate from stored sections
     if (meta.sections?.length) {
-      const lines = [`# AWSops AI Diagnosis Report`, '', '---', ''];
+      const lines = [`# MusinSight AI Diagnosis Report`, '', '---', ''];
       for (const s of meta.sections) {
         lines.push(`## ${s.title}`, '', s.content, '', '---', '');
       }
@@ -794,7 +794,7 @@ export async function GET(request: NextRequest) {
       return new NextResponse(md, {
         headers: {
           'Content-Type': 'text/markdown; charset=utf-8',
-          'Content-Disposition': `attachment; filename="AWSops_Report_${date}.md"`,
+          'Content-Disposition': `attachment; filename="MusinSight_Report_${date}.md"`,
           'Content-Length': String(md.length),
         },
       });
