@@ -1,4 +1,7 @@
-# AWSops 대시보드 v1.8.0 — Claude 컨텍스트
+# MusinSight 대시보드 v1.8.0 — Claude 컨텍스트
+
+> 무신사 배포판. 업스트림 `awsops`에서 포크 — 화면 표기는 MusinSight, 저장소/스택/리소스 이름은 `awsops` 계열 그대로다.
+> 배포 환경 제약과 재배포 시 주의사항: `docs/runbooks/musinsa-deployment.md` · 전담 에이전트: `.claude/agents/musinsight.md`
 
 ## 프로젝트 개요
 실시간 AWS/Kubernetes 리소스 모니터링, 네트워크 문제 해결, CIS 컴플라이언스, AI 기반 분석, 외부 데이터소스 연동, AI 종합 진단을 제공하는 운영 대시보드.
@@ -8,10 +11,11 @@ Steampipe, Next.js 14, Amazon Bedrock AgentCore로 구축.
 - **프론트엔드**: Next.js 14 (App Router) + Tailwind CSS 다크 테마 + Recharts + React Flow
 - **데이터**: Steampipe 내장 PostgreSQL (포트 9193) — AWS 380+ 테이블, K8s 60+ 테이블, 멀티 어카운트 Aggregator
 - **외부 데이터소스**: Prometheus, Loki, Tempo, ClickHouse, Jaeger, Dynatrace, Datadog (SSRF 방지 + allowlist)
-- **AI 엔진**: Bedrock Sonnet/Opus 4.6 + AgentCore Runtime (Strands) + 8 Gateway (125 MCP 도구) + 19 Lambda
-- **AI 진단**: 15섹션 Bedrock Opus 분석 + DOCX/MD/PDF 내보내기 + 자동 스케줄링
-- **인증**: Cognito User Pool + Lambda@Edge (Python 3.12, us-east-1) + CloudFront
-- **인프라**: CDK (`infra-cdk/`) → CloudFront (CACHING_DISABLED) → ALB → EC2 (t4g.2xlarge, Private Subnet)
+- **AI 엔진**: Bedrock Opus 4.8 (`global.anthropic.claude-opus-4-8`) + AgentCore Runtime (Strands) + 8 Gateway (125 MCP 도구) + 19 Lambda
+- **AI 진단**: 15섹션 Bedrock Opus 4.8 분석 + DOCX/MD/PDF 내보내기 + 자동 스케줄링
+- **인증**: Cognito User Pool + ALB `authenticate-cognito` 리스너 액션 (조직 SCP가 CloudFront 차단 — ADR-009)
+- **인프라**: CDK (`infra-cdk/`) → ALB (HTTPS, ACM 서울 리전) → EC2 (t4g.2xlarge, Private Subnet)
+- **라우팅**: `/` = 대시보드(:3000), `/vscode` = nginx(:8889) → code-server(:8888), `/awsops*` = 루트 리다이렉트
 
 ## 현황 (v1.8.0)
 | 항목 | 수치 |
@@ -43,8 +47,8 @@ Steampipe, Next.js 14, Amazon Bedrock AgentCore로 구축.
 - SQL 쿼리: AWS 테이블 `list` 쿼리에 `account_id` 컬럼 필수 포함
 
 ### Next.js 규칙
-- `basePath: '/awsops'` — `next.config.mjs`에 설정
-- 모든 `fetch()` URL에 `/awsops/api/*` 접두사 필수 (basePath가 fetch에 자동 적용 안 됨)
+- `basePath` 없음 — 대시보드는 루트(`/`)에서 서빙 (업스트림 원본은 `/awsops`를 쓰므로 주의)
+- 모든 `fetch()` URL은 `/api/*` 접두사
 - 모든 컴포넌트는 `export default` — `{ X }` 형태 아닌 `import X from '...'`
 - 프로덕션 빌드만 사용 (`npm run build + start`)
 
@@ -90,7 +94,7 @@ Steampipe, Next.js 14, Amazon Bedrock AgentCore로 구축.
 - `app-config.ts` — 앱 설정 (costEnabled, agentRuntimeArn, codeInterpreterName, memoryId, accounts[], customerLogo, adminEmails)
 - `agentcore-stats.ts` — AgentCore 호출 통계 (총 호출, 평균 응답시간, 게이트웨이별, 모델별 토큰 사용량)
 - `agentcore-memory.ts` — 대화 이력 영구 저장/검색 (사용자별 분리, data/memory/)
-- `auth-utils.ts` — Cognito JWT에서 사용자 정보 추출 (email, sub)
+- `auth-utils.ts` — 사용자 정보 추출 (ALB `x-amzn-oidc-data` 헤더 우선, 레거시 쿠키 폴백)
 - `cache-warmer.ts` — 백그라운드 캐시 프리워밍 (대시보드 23개 쿼리, 4분 주기)
 - `datasource-client.ts` — 외부 데이터소스 HTTP 클라이언트 (7종: Prometheus, Loki, Tempo, ClickHouse, Jaeger, Dynatrace, Datadog)
 - `datasource-registry.ts` — 데이터소스 타입 레지스트리 (헬스체크 엔드포인트, 쿼리 언어)
@@ -120,8 +124,8 @@ Steampipe, Next.js 14, Amazon Bedrock AgentCore로 구축.
 - `report/route.ts` — AI 종합 진단 리포트 생성 + S3 저장 + 스케줄링
 
 ### 인프라
-- `infra-cdk/lib/awsops-stack.ts` — CDK 인프라 (VPC, EC2, ALB, CloudFront)
-- `infra-cdk/lib/cognito-stack.ts` — CDK Cognito (User Pool, Lambda@Edge)
+- `infra-cdk/lib/awsops-stack.ts` — CDK 인프라 (VPC, EC2, ALB, ACM, Route 53, nginx user-data)
+- ※ Cognito User Pool과 ALB 인증 액션은 CDK가 아니라 `scripts/05-setup-cognito.sh`가 만든다
 - `agent/agent.py` — Strands Agent 소스 (EC2에서 Docker 빌드 → ECR 푸시 → AgentCore Runtime에서 실행)
 - `agent/lambda/*.py` — 19개 Lambda 소스 + `create_targets.py`
 - ※ EC2에서는 Docker 이미지 **빌드만** 수행. 실행은 AgentCore 관리형 서비스에서 컨테이너로 실행됨.
@@ -156,7 +160,7 @@ Step 6d: 06d-setup-agentcore-interpreter.sh  Code Interpreter
 Step 6e: 06e-setup-agentcore-config.sh   AgentCore 설정 적용 (ARN, Gateway URL)
 Step 6f: 06f-setup-agentcore-memory.sh   Memory Store (대화 이력, 365일 보관)
 Step 7:  07-setup-opencost.sh            Prometheus + OpenCost (EKS 비용 분석)
-Step 8:  08-setup-cloudfront-auth.sh     Lambda@Edge → CloudFront 연동
+Step 8:  (사용 안 함 — ALB Cognito 인증이 Step 5에서 처리됨)
 Step 9:  09-start-all.sh                 전체 서비스 시작
 Step 10: 10-stop-all.sh                  전체 서비스 중지
 Step 11: 11-verify.sh                    검증 (헬스체크)
@@ -171,7 +175,7 @@ Step 12: 12-setup-multi-account.sh       멀티 어카운트 설정 (선택, Agg
 - agent.py GATEWAYS: 계정별 Gateway URL로 업데이트 후 Docker 재빌드 필요
 - AgentCore 응답: 최종 텍스트만 반환 → 응답 내용 키워드로 도구 추론
 - Memory 이름: 하이픈 불가, 언더스코어만 (`awsops_memory`). `eventExpiryDuration` 최대 365일.
-- Sign Out: HttpOnly 쿠키는 `document.cookie`로 삭제 불가 → `POST /api/auth`로 서버 사이드 삭제
+- Sign Out: 앱 쿠키만 지우면 ALB 세션이 살아있음 → `POST /api/auth`가 `AWSELBAuthSessionCookie-*` 만료 + Cognito 로그아웃 URL 반환
 
 ## 새 페이지 추가
 1. `information_schema.columns`로 컬럼명 확인 (JSONB 중첩 구조도 확인)
@@ -190,7 +194,10 @@ Step 12: 12-setup-multi-account.sh       멀티 어카운트 설정 (선택, Agg
 
 ---
 
-# AWSops Dashboard v1.8.0 — Claude Context (English)
+# MusinSight Dashboard v1.8.0 — Claude Context (English)
+
+> musinsa deployment, forked from upstream `awsops`. UI says MusinSight; repo/stack/resource names keep the `awsops` prefix.
+> Environment constraints and redeploy gotchas: `docs/runbooks/musinsa-deployment.md` · project agent: `.claude/agents/musinsight.md`
 
 ## Project Overview
 AWS + Kubernetes operations dashboard with real-time resource monitoring, network troubleshooting, CIS compliance, AI-powered analysis, external datasource integration, and AI comprehensive diagnosis. Built with Steampipe, Next.js 14, and Amazon Bedrock AgentCore.
@@ -199,10 +206,11 @@ AWS + Kubernetes operations dashboard with real-time resource monitoring, networ
 - **Frontend**: Next.js 14 (App Router) + Tailwind CSS dark theme + Recharts + React Flow
 - **Data**: Steampipe embedded PostgreSQL (port 9193) — 380+ AWS tables, 60+ K8s tables, multi-account Aggregator
 - **External Datasources**: Prometheus, Loki, Tempo, ClickHouse, Jaeger, Dynatrace, Datadog (SSRF-protected + allowlist)
-- **AI**: Bedrock Sonnet/Opus 4.6 + AgentCore Runtime (Strands) + 8 Gateways (125 MCP tools) + 19 Lambda
-- **AI Diagnosis**: 15-section Bedrock Opus analysis + DOCX/MD/PDF export + auto-scheduling
-- **Auth**: Cognito User Pool + Lambda@Edge (Python 3.12, us-east-1) + CloudFront
-- **Infra**: CDK → CloudFront (CACHING_DISABLED) → ALB → EC2 (t4g.2xlarge, Private Subnet)
+- **AI**: Bedrock Opus 4.8 (`global.anthropic.claude-opus-4-8`) + AgentCore Runtime (Strands) + 8 Gateways (125 MCP tools) + 19 Lambda
+- **AI Diagnosis**: 15-section Bedrock Opus 4.8 analysis + DOCX/MD/PDF export + auto-scheduling
+- **Auth**: Cognito User Pool + ALB `authenticate-cognito` listener action (org SCP blocks CloudFront — ADR-009)
+- **Infra**: CDK → ALB (HTTPS, regional ACM cert) → EC2 (t4g.2xlarge, Private Subnet)
+- **Routing**: `/` = dashboard (:3000), `/vscode` = nginx (:8889) → code-server (:8888), `/awsops*` = redirect to root
 
 ## Stats (v1.8.0)
 | Item | Count |
@@ -233,8 +241,8 @@ AWS + Kubernetes operations dashboard with real-time resource monitoring, networ
 - SQL queries: AWS table `list` queries must include `account_id` column
 
 ### Next.js
-- `basePath: '/awsops'` in `next.config.mjs`
-- ALL `fetch()` URLs must use `/awsops/api/*` prefix (basePath not auto-applied)
+- No `basePath` — the dashboard is served at the root (upstream uses `/awsops`)
+- ALL `fetch()` URLs use the `/api/*` prefix
 - ALL components use `export default`. Production build only.
 
 ### Steampipe Queries
@@ -279,7 +287,7 @@ AWS + Kubernetes operations dashboard with real-time resource monitoring, networ
 - `app-config.ts` — App config (costEnabled, agentRuntimeArn, codeInterpreterName, memoryId, accounts[])
 - `agentcore-stats.ts` — AgentCore call stats (total calls, avg time, per-gateway, per-model token usage)
 - `agentcore-memory.ts` — Conversation history persistence/search (per-user, data/memory/)
-- `auth-utils.ts` — Extract Cognito user info from JWT (email, sub)
+- `auth-utils.ts` — Extract user info (ALB `x-amzn-oidc-data` header first, legacy cookie fallback)
 - `cache-warmer.ts` — Background cache pre-warming (dashboard 23 queries, 4-min interval)
 - `datasource-client.ts` — External datasource HTTP client (7 platforms: Prometheus, Loki, Tempo, ClickHouse, Jaeger, Dynatrace, Datadog)
 - `datasource-registry.ts` — Datasource type registry (health endpoints, query languages)
@@ -309,8 +317,8 @@ AWS + Kubernetes operations dashboard with real-time resource monitoring, networ
 - `report/route.ts` — AI diagnosis report generation + S3 storage + scheduling
 
 ### Infrastructure
-- `infra-cdk/lib/awsops-stack.ts` — CDK infra (VPC, EC2, ALB, CloudFront)
-- `infra-cdk/lib/cognito-stack.ts` — CDK Cognito (User Pool, Lambda@Edge)
+- `infra-cdk/lib/awsops-stack.ts` — CDK infra (VPC, EC2, ALB, ACM, Route 53, nginx user-data)
+- ※ Cognito User Pool과 ALB 인증 액션은 CDK가 아니라 `scripts/05-setup-cognito.sh`가 만든다
 - `agent/agent.py` — Strands Agent source (Docker build on EC2 → ECR push → runs on AgentCore Runtime)
 - Note: EC2 only **builds** the Docker image. Execution happens on AgentCore managed service.
 - `agent/lambda/*.py` — 19 Lambda sources + `create_targets.py`
@@ -345,7 +353,7 @@ Step 6d: 06d-setup-agentcore-interpreter.sh  Code Interpreter
 Step 6e: 06e-setup-agentcore-config.sh   AgentCore config apply (ARN, Gateway URL)
 Step 6f: 06f-setup-agentcore-memory.sh   Memory Store (conversation history, 365-day retention)
 Step 7:  07-setup-opencost.sh            Prometheus + OpenCost (EKS cost analysis)
-Step 8:  08-setup-cloudfront-auth.sh     Lambda@Edge → CloudFront integration
+Step 8:  (unused — ALB Cognito auth is attached in Step 5)
 Step 9:  09-start-all.sh                 Start all services
 Step 10: 10-stop-all.sh                  Stop all services
 Step 11: 11-verify.sh                    Verification (health check)
@@ -360,7 +368,7 @@ Step 12: 12-setup-multi-account.sh       Multi-account setup (optional, Aggregat
 - agent.py GATEWAYS: update per-account gateway URLs then rebuild Docker
 - AgentCore response: final text only (no tool_call tags) → tools inferred from keywords
 - Memory name: no hyphens, underscores only (`awsops_memory`). `eventExpiryDuration` max 365 days.
-- Sign Out: HttpOnly cookie requires server-side deletion via `POST /api/auth`
+- Sign Out: clearing the app cookie alone leaves the ALB session alive → `POST /api/auth` expires `AWSELBAuthSessionCookie-*` and returns the Cognito logout URL
 
 ## Adding New Pages
 1. Verify columns via `information_schema.columns` (check JSONB nesting too)
