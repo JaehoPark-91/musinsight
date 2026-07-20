@@ -56,7 +56,7 @@ export default function AIPage() {
 
   // 대화 이력 로드 / Load conversation history
   const loadHistory = () => {
-    fetch('/awsops/api/agentcore?action=conversations&limit=30')
+    fetch('/api/agentcore?action=conversations&limit=30')
       .then(r => r.json())
       .then(d => setHistoryData(d.conversations || []))
       .catch(() => {});
@@ -99,7 +99,7 @@ export default function AIPage() {
     const startTime = Date.now();
 
     try {
-      const res = await fetch('/awsops/api/ai', {
+      const res = await fetch('/api/ai', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

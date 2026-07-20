@@ -131,7 +131,7 @@ export default function InventoryPage() {
     setLoading(true);
     try {
       const acctParam = currentAccountId && currentAccountId !== '__all__' ? `&accountId=${currentAccountId}` : '';
-      const res = await fetch(`/awsops/api/steampipe?action=inventory&days=90${acctParam}`);
+      const res = await fetch(`/api/steampipe?action=inventory&days=90${acctParam}`);
       const data = await res.json();
       setHistory(data.history || []);
     } catch {} finally { setLoading(false); }
